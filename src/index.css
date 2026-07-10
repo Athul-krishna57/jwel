@@ -244,3 +244,12 @@ select:focus {
   border-color: rgba(201, 168, 76, 0.6);
   box-shadow: 0 0 15px rgba(201, 168, 76, 0.15);
 }
+
+.dropdown-item {
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.dropdown-item:hover {
+  background: rgba(201, 168, 76, 0.08);
+  color: var(--gold-light) !important;
+}

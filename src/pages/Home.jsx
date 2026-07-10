@@ -1,7 +1,13 @@
-import { useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, useScroll, useTransform, useInView } from 'framer-motion';
 import { ArrowRight, Crown, Heart, Star } from 'lucide-react';
+import { listProducts } from '../api/products';
+import { listWishlist, addToWishlist, removeFromWishlist } from '../api/wishlist';
+import { useAuth } from '../context/AuthContext';
+import { useShop } from '../context/ShopContext';
+import { formatINR } from '../utils/formatCurrency';
+import { getProductVisual } from '../utils/categoryVisuals';
 
 const fadeUp = {
   hidden: { opacity: 0, y: 40 },
@@ -21,13 +27,6 @@ function SectionTitle({ tag, title, subtitle }) {
     </motion.div>
   );
 }
-
-const collections = [
-  { id: 1, name: 'Celestial Necklace', category: 'Necklaces', price: '₹12,500', tag: 'Bestseller', emoji: '✦', desc: 'Delicate gold chain with star pendant', gradient: 'linear-gradient(135deg, #1a1508, #2a2010)' },
-  { id: 2, name: 'Aurora Earrings', category: 'Earrings', price: '₹8,200', tag: 'New', emoji: '◈', desc: 'Drop earrings with pearl accents', gradient: 'linear-gradient(135deg, #0e1218, #151c28)' },
-  { id: 3, name: 'Eternal Bangle', category: 'Bangles', price: '₹15,800', tag: 'Limited', emoji: '◯', desc: 'Hand-engraved 22k gold bangle', gradient: 'linear-gradient(135deg, #180e0e, #281515)' },
-  { id: 4, name: 'Bloom Ring', category: 'Rings', price: '₹6,900', tag: 'Popular', emoji: '✿', desc: 'Floral motif with ruby stone', gradient: 'linear-gradient(135deg, #0e1808, #152810)' },
-];
 
 const testimonials = [
   { name: 'Priya Sharma', role: 'Fashion Blogger', text: 'LookIn pieces are absolutely breathtaking. The craftsmanship is unmatched and I get compliments everywhere I go.', stars: 5 },
@@ -49,6 +48,45 @@ export default function Home() {
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
   const heroY = useTransform(scrollYProgress, [0, 1], ['0%', '30%']);
   const heroOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
+
+  const { isAuthenticated } = useAuth();
+  const { refreshCounts } = useShop();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const [featured, setFeatured] = useState([]);
+  const [wishlistMap, setWishlistMap] = useState({});
+
+  useEffect(() => {
+    listProducts().then(data => setFeatured((data.results ?? data).slice(0, 4))).catch(() => setFeatured([]));
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setWishlistMap({});
+      return;
+    }
+    listWishlist().then(data => {
+      const items = data.results ?? data;
+      setWishlistMap(Object.fromEntries(items.map(item => [item.product.id, item.id])));
+    }).catch(() => setWishlistMap({}));
+  }, [isAuthenticated]);
+
+  const handleToggleWishlist = async (product) => {
+    if (!isAuthenticated) {
+      navigate('/login', { state: { from: location } });
+      return;
+    }
+    const existingId = wishlistMap[product.id];
+    if (existingId) {
+      await removeFromWishlist(existingId);
+      setWishlistMap(prev => { const next = { ...prev }; delete next[product.id]; return next; });
+    } else {
+      const item = await addToWishlist(product.id);
+      setWishlistMap(prev => ({ ...prev, [product.id]: item.id }));
+    }
+    refreshCounts();
+  };
 
   return (
     <div style={{ background: '#0a0a0a' }}>
@@ -120,26 +158,39 @@ export default function Home() {
         <div style={{ maxWidth: 1280, margin: '0 auto' }}>
           <SectionTitle tag="Curated for You" title="Featured Collections" subtitle="Each piece is a masterwork of artistry, designed to adorn the modern woman with grace and sophistication." />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 24 }}>
-            {collections.map((item, i) => (
-              <motion.div key={item.id} initial={{ opacity: 0, y: 50 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-60px' }} transition={{ delay: i * 0.12, duration: 0.7 }} className="card-dark" style={{ borderRadius: 2, overflow: 'hidden', cursor: 'pointer' }}>
-                <div style={{ height: 240, background: item.gradient, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                  <div style={{ position: 'absolute', width: 120, height: 120, borderRadius: '50%', background: 'radial-gradient(circle, rgba(201,168,76,0.12), transparent)', top: '50%', left: '50%', transform: 'translate(-50%,-50%)' }} />
-                  <motion.div whileHover={{ scale: 1.1, rotate: 10 }} transition={{ duration: 0.4 }} style={{ fontSize: '4rem', position: 'relative', zIndex: 1, color: 'rgba(201,168,76,0.7)' }}>{item.emoji}</motion.div>
-                  <div style={{ position: 'absolute', top: 14, left: 14, background: 'linear-gradient(135deg, #c9a84c, #e8c97a)', color: '#0a0a0a', fontSize: '0.6rem', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', padding: '3px 10px', borderRadius: 2 }}>{item.tag}</div>
-                </div>
-                <div style={{ padding: '20px 20px 24px' }}>
-                  <p style={{ color: 'rgba(201,168,76,0.6)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 6 }}>{item.category}</p>
-                  <h3 className="font-serif" style={{ color: '#fdf8f0', fontSize: '1.15rem', fontWeight: 500, marginBottom: 6 }}>{item.name}</h3>
-                  <p style={{ color: 'rgba(253,248,240,0.4)', fontSize: '0.75rem', marginBottom: 14, lineHeight: 1.6 }}>{item.desc}</p>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span className="gold-gradient font-serif" style={{ fontSize: '1.1rem', fontWeight: 600 }}>{item.price}</span>
-                    <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }} style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid rgba(201,168,76,0.4)', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c9a84c' }}>
-                      <Heart size={13} />
-                    </motion.button>
+            {featured.map((item, i) => {
+              const visual = getProductVisual(item);
+              const isWishlisted = !!wishlistMap[item.id];
+              return (
+                <motion.div key={item.id} initial={{ opacity: 0, y: 50 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-60px' }} transition={{ delay: i * 0.12, duration: 0.7 }} className="card-dark" style={{ borderRadius: 2, overflow: 'hidden', cursor: 'pointer' }} onClick={() => navigate(`/product/${item.id}`)}>
+                  <div style={{ height: 240, background: visual.image ? `url(${visual.image}) center/cover` : visual.gradient, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                    {!visual.image && (
+                      <>
+                        <div style={{ position: 'absolute', width: 120, height: 120, borderRadius: '50%', background: 'radial-gradient(circle, rgba(201,168,76,0.12), transparent)', top: '50%', left: '50%', transform: 'translate(-50%,-50%)' }} />
+                        <motion.div whileHover={{ scale: 1.1, rotate: 10 }} transition={{ duration: 0.4 }} style={{ fontSize: '4rem', position: 'relative', zIndex: 1, color: 'rgba(201,168,76,0.7)' }}>{visual.emoji}</motion.div>
+                      </>
+                    )}
+                    {item.tag && <div style={{ position: 'absolute', top: 14, left: 14, background: 'linear-gradient(135deg, #c9a84c, #e8c97a)', color: '#0a0a0a', fontSize: '0.6rem', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', padding: '3px 10px', borderRadius: 2 }}>{item.tag}</div>}
                   </div>
-                </div>
-              </motion.div>
-            ))}
+                  <div style={{ padding: '20px 20px 24px' }}>
+                    <p style={{ color: 'rgba(201,168,76,0.6)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 6 }}>{item.category_name}</p>
+                    <h3 className="font-serif" style={{ color: '#fdf8f0', fontSize: '1.15rem', fontWeight: 500, marginBottom: 6 }}>{item.name}</h3>
+                    <p style={{ color: 'rgba(253,248,240,0.4)', fontSize: '0.75rem', marginBottom: 14, lineHeight: 1.6 }}>{item.description}</p>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span className="gold-gradient font-serif" style={{ fontSize: '1.1rem', fontWeight: 600 }}>{formatINR(item.price)}</span>
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={(e) => { e.stopPropagation(); handleToggleWishlist(item); }}
+                        style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid rgba(201,168,76,0.4)', background: isWishlisted ? 'rgba(201,168,76,0.15)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c9a84c' }}
+                      >
+                        <Heart size={13} fill={isWishlisted ? '#e8c97a' : 'none'} />
+                      </motion.button>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
           </div>
           <div style={{ textAlign: 'center', marginTop: 48 }}>
             <Link to="/collections" style={{ textDecoration: 'none' }}>
